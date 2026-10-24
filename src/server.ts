@@ -5,7 +5,6 @@ import {
   writeResponseToNodeResponse,
 } from '@angular/ssr/node';
 import express from 'express';
-import nodemailer from 'nodemailer';
 import { join } from 'node:path';
 
 interface CitaRequest {
@@ -33,12 +32,6 @@ function limaParts(date = new Date()): Record<string, string> {
     timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
   }).formatToParts(date).map((part) => [part.type, part.value]));
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (character) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  })[character] ?? character);
 }
 
 function cleanText(value: unknown, maxLength: number): string {
@@ -112,8 +105,9 @@ app.post('/api/citas', limitInvitations, async (req, res) => {
     return;
   }
 
-  const { SMTP_HOST, SMTP_USER, SMTP_PASSWORD, CITA_DESTINATARIO } = process.env;
-  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASSWORD || !CITA_DESTINATARIO) {
+  const { EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY, CITA_DESTINATARIO } = process.env;
+  const EMAILJS_PRIVATE_KEY = process.env['EMAILJS_PRIVATE_KEY'];
+  if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_PUBLIC_KEY || !CITA_DESTINATARIO) {
     res.status(503).json({ message: 'El servicio de invitaciones no está configurado.' });
     return;
   }
@@ -121,33 +115,40 @@ app.post('/api/citas', limitInvitations, async (req, res) => {
   const receivedAt = new Intl.DateTimeFormat('es-PE', {
     timeZone: 'America/Lima', dateStyle: 'long', timeStyle: 'short',
   }).format(new Date());
-  const safe = {
-    nombre: escapeHtml(nombre), correo: escapeHtml(correo || 'No indicado'),
-    tipoCita: escapeHtml(tipoCita), fecha: escapeHtml(fecha), hora: escapeHtml(hora),
-    lugar: escapeHtml(lugar || 'Por decidir juntos'),
-    mensaje: escapeHtml(mensaje || 'Sin mensaje adicional').replace(/\r?\n/g, '<br>'),
-    receivedAt: escapeHtml(receivedAt),
-  };
-
   try {
-    const port = Number(process.env['SMTP_PORT'] ?? 587);
-    const transporter = nodemailer.createTransport({
-      host: SMTP_HOST,
-      port,
-      secure: process.env['SMTP_SECURE'] === 'true' || port === 465,
-      auth: { user: SMTP_USER, pass: SMTP_PASSWORD },
+    const emailResponse = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        service_id: EMAILJS_SERVICE_ID,
+        template_id: EMAILJS_TEMPLATE_ID,
+        user_id: EMAILJS_PUBLIC_KEY,
+        ...(EMAILJS_PRIVATE_KEY ? { accessToken: EMAILJS_PRIVATE_KEY } : {}),
+        template_params: {
+          asunto: `Solicitud de cita ${new Date().getFullYear()} - ${nombre}`,
+          nombre,
+          correo: correo || 'No indicado',
+          tipoCita,
+          fecha,
+          hora,
+          zona_horaria: 'America/Lima',
+          lugar: lugar || 'No indicado',
+          mensaje: mensaje || 'Sin mensaje adicional',
+          fecha_recepcion: receivedAt,
+          to_email: CITA_DESTINATARIO,
+          reply_to: correo,
+        },
+      }),
     });
-    await transporter.sendMail({
-      from: process.env['SMTP_FROM'] ?? SMTP_USER,
-      to: CITA_DESTINATARIO,
-      replyTo: correo || undefined,
-      subject: '💌 ¡Tienes una nueva invitación para una cita!',
-      text: `Nueva invitación de ${nombre}\nPlan: ${tipoCita}\nFecha: ${fecha} ${hora} (America/Lima)\nLugar: ${lugar || 'Por decidir juntos'}\nMensaje: ${mensaje || 'Sin mensaje adicional'}\nRecibida: ${receivedAt}`,
-      html: `<!doctype html><html lang="es"><body style="margin:0;background:#fff5f7;font-family:Arial,sans-serif;color:#29232a;padding:28px 12px"><table role="presentation" style="max-width:600px;width:100%;margin:auto;background:#fff;border-collapse:collapse"><tr><td style="padding:34px 32px 12px;text-align:center;color:#8e3a59;font-size:12px;letter-spacing:3px">UNA INVITACIÓN ESPECIAL</td></tr><tr><td style="padding:0 32px 20px;text-align:center"><h1 style="font-family:Georgia,serif;font-weight:normal;font-size:30px;color:#8e3a59">¡Tienes una nueva cita por imaginar! 💌</h1></td></tr><tr><td style="padding:0 32px 30px"><table role="presentation" style="width:100%;border-collapse:collapse"><tr><th align="left" style="padding:12px 0;border-bottom:1px solid #f0dfe3;color:#8e3a59">De</th><td style="padding:12px 0;border-bottom:1px solid #f0dfe3">${safe.nombre}</td></tr><tr><th align="left" style="padding:12px 0;border-bottom:1px solid #f0dfe3;color:#8e3a59">Plan</th><td style="padding:12px 0;border-bottom:1px solid #f0dfe3">${safe.tipoCita}</td></tr><tr><th align="left" style="padding:12px 0;border-bottom:1px solid #f0dfe3;color:#8e3a59">Fecha y hora</th><td style="padding:12px 0;border-bottom:1px solid #f0dfe3">${safe.fecha} · ${safe.hora} (Lima)</td></tr><tr><th align="left" style="padding:12px 0;border-bottom:1px solid #f0dfe3;color:#8e3a59">Lugar</th><td style="padding:12px 0;border-bottom:1px solid #f0dfe3">${safe.lugar}</td></tr><tr><th align="left" style="padding:12px 0;border-bottom:1px solid #f0dfe3;color:#8e3a59">Correo</th><td style="padding:12px 0;border-bottom:1px solid #f0dfe3">${safe.correo}</td></tr><tr><th align="left" style="padding:12px 0;color:#8e3a59">Mensaje</th><td style="padding:12px 0">${safe.mensaje}</td></tr></table><p style="margin:26px 0 0;color:#74666c;font-size:12px">Solicitud recibida el ${safe.receivedAt}.</p></td></tr><tr><td style="padding:17px;text-align:center;background:#f8ece9;color:#8e3a59;font-family:Georgia,serif;font-style:italic">Una solicitud no es una cita confirmada todavía.</td></tr></table></body></html>`,
-    });
+    if (!emailResponse.ok) {
+      const details = (await emailResponse.text()).replace(/\s+/g, ' ').slice(0, 500);
+      console.error(`EmailJS rechazó la invitación (HTTP ${emailResponse.status}): ${details}`);
+      res.status(502).json({ message: 'No se pudo entregar la invitación por correo.' });
+      return;
+    }
     res.status(201).json({ received: true });
-  } catch {
-    console.error('No se pudo enviar el correo de invitación.');
+  } catch (error) {
+    console.error('No se pudo conectar con EmailJS:', error);
     res.status(502).json({ message: 'No se pudo entregar la invitación por correo.' });
   }
 });
