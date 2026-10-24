@@ -4,3 +4,4 @@ publish = "dist/Solicitud_Citas/browser"
 
 [build.environment]
 NODE_VERSION = "24.13.1"
+SECRETS_SCAN_OMIT_KEYS = "CITA_DIAS_DISPONIBLES,CITA_HORARIOS"

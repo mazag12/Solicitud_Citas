@@ -26,7 +26,7 @@ El servidor de producción escucha en `http://localhost:4000` por defecto. En am
 
 ### Despliegue en Netlify
 
-La configuración de [netlify.toml](./netlify.toml) establece Node.js 24.13.1, requerido por el runtime de Netlify para Angular SSR, y el directorio de publicación (`dist/Solicitud_Citas/browser`). Si Netlify sigue mostrando otro directorio, actualiza **Project configuration → Build & deploy → Build settings → Publish directory** a ese mismo valor y vuelve a desplegar. Configura las variables de EmailJS y `CITA_DESTINATARIO` en las variables de entorno del sitio; no subas `.env`.
+La configuración de [netlify.toml](./netlify.toml) establece Node.js 24.13.1, requerido por el runtime de Netlify para Angular SSR, y el directorio de publicación (`dist/Solicitud_Citas/browser`). También excluye del escaneo de secretos únicamente `CITA_DIAS_DISPONIBLES` y `CITA_HORARIOS`, que son configuración pública y no credenciales. Si Netlify sigue mostrando otro directorio, actualiza **Project configuration → Build & deploy → Build settings → Publish directory** a ese mismo valor y vuelve a desplegar. Configura las variables de EmailJS y `CITA_DESTINATARIO` en las variables de entorno del sitio; no subas `.env`.
 
 ## Configuración del servidor
 
