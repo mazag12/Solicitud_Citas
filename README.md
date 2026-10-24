@@ -24,6 +24,10 @@ npm run serve:ssr:Solicitud_Citas
 
 El servidor de producción escucha en `http://localhost:4000` por defecto. En ambos modos, `GET /api/citas/disponibilidad` sirve el horario y `POST /api/citas` valida y envía la invitación.
 
+### Despliegue en Netlify
+
+La configuración de [netlify.toml](./netlify.toml) establece el directorio de publicación requerido por el runtime de Angular (`dist/Solicitud_Citas/browser`). Si Netlify sigue mostrando otro directorio, actualiza **Project configuration → Build & deploy → Build settings → Publish directory** a ese mismo valor y vuelve a desplegar. Configura las variables de EmailJS y `CITA_DESTINATARIO` en las variables de entorno del sitio; no subas `.env`.
+
 ## Configuración del servidor
 
 El comando del servidor carga automáticamente las variables del archivo `.env` si existe. También puedes configurarlas directamente en el entorno del proceso Node. No incluyas las credenciales en Angular ni en el navegador:
